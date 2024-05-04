@@ -6,6 +6,9 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    ui->chatBrowser->setVerticalScrollMode(QListWidget::ScrollPerPixel);
+    ui->chatBrowser->verticalScrollBar()->setSingleStep(10);
+    ui->chatBrowser->verticalScrollBar()->setPageStep(20);
     socket = new QTcpSocket(this);
     connect(socket, &QTcpSocket::readyRead, this, &MainWindow::slotReadyRead);
     connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
@@ -42,8 +45,8 @@ void MainWindow::slotReadyRead()
         qDebug() << "Ready read";
         while (true) {
             if (!nextBlockSize) {
-                if (socket->bytesAvailable() < 2) {
-                    qDebug() << "Available bytes less than 2";
+                if (socket->bytesAvailable() < 4) {
+                    qDebug() << "Available bytes less than 4";
                     break;
                 }
                 in >> nextBlockSize;
@@ -51,6 +54,7 @@ void MainWindow::slotReadyRead()
             }
             if (socket->bytesAvailable() < nextBlockSize) {
                 qDebug() << "Data is not fully loaded";
+                //continue;
                 break;
             }
             quint16 type;
@@ -59,6 +63,7 @@ void MainWindow::slotReadyRead()
             // 1 - set message announcement from server
             // 2 - set id from server
             // 3 - ping pong check from server
+            // 4 - set picture announcement from server
             qDebug() << type;
             switch (type) {
                 case 0:
@@ -73,6 +78,9 @@ void MainWindow::slotReadyRead()
                 case 3:
                     pingPongAskFromServer();
                     break;
+                case 4:
+                    setPictureFromServer(in);
+                    break;
             }
             nextBlockSize = 0;
         }
@@ -82,13 +90,24 @@ void MainWindow::slotReadyRead()
     }
 }
 
+void MainWindow::setPictureFromServer(QDataStream& in) {
+    QImage pic; QString sender;
+    in >> sender >> pic;
+    PictureWidget* pictureItem = new PictureWidget(nullptr, sender, pic);
+    QListWidgetItem* item = new QListWidgetItem;
+    ui->chatBrowser->addItem(item);
+    item->setSizeHint(QSize(0, 300));
+    ui->chatBrowser->setItemWidget(item, pictureItem);
+    ui->chatBrowser->scrollToBottom();
+}
+
 void MainWindow::sendConfirmationToServer() {
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << id << quint16(3);
+    out << quint32(0) << id << quint16(3);
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
+    out << quint32(data.size() - sizeof(quint32));
     socket->write(data);
 }
 
@@ -112,7 +131,12 @@ void MainWindow::setNameFromServer(QDataStream &in) {
 void MainWindow::setMessageFromServer(QDataStream &in) {
     QString name, message;
     in >> name >> message;
-    ui->chatBrowser->append(name + ":\n" + message + "\n");
+    MessageWidget* messageItem = new MessageWidget(nullptr, name, message);
+    QListWidgetItem* item = new QListWidgetItem;
+    ui->chatBrowser->addItem(item);
+    item->setSizeHint(QSize(0, 80));
+    ui->chatBrowser->setItemWidget(item, messageItem);
+    ui->chatBrowser->scrollToBottom();
 }
 
 void MainWindow::setIdFromServer(QDataStream& in) {
@@ -125,10 +149,10 @@ void MainWindow::nameChangedSlot(QString name) {
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << id << quint16(0) << name;
+    out << quint32(0) << id << quint16(0) << name;
     qDebug() << id;
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
+    out << quint32(data.size() - sizeof(quint32));
     socket->write(data);
 }
 
@@ -147,9 +171,9 @@ void MainWindow::sendMessageToServer(QString message) {
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << id << quint16(1) << message;
+    out << quint32(0) << id << quint16(1) << message;
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
+    out << quint32(data.size() - sizeof(quint32));
     socket->write(data);
 }
 
@@ -168,9 +192,9 @@ void MainWindow::sendDisconnectMessageToServer() {
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << id << quint16(2);
+    out << quint32(0) << id << quint16(2);
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
+    out << quint32(data.size() - sizeof(quint32));
     socket->write(data);
 }
 
@@ -195,4 +219,19 @@ void MainWindow::on_messageEdit_returnPressed()
     }
     ui->messageEdit->setText("");
     sendMessageToServer(message);
+}
+
+void MainWindow::on_sendPictureButton_clicked()
+{
+    QString path;
+    path = QFileDialog::getOpenFileName(this, "Выбрать файл", "/home",
+                       "All files (*.*);; JPEG Image (*.jpg) ;; PNG Image (*.png);");
+    QImage pic(path);
+    data.clear();
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_12);
+    out << quint32(0) << id << quint16(4) << pic;
+    out.device()->seek(0);
+    out << quint32(data.size() - sizeof(quint32));
+    socket->write(data);
 }

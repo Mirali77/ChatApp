@@ -7,6 +7,11 @@
 #include <QTimer>
 #include <QMessageBox>
 #include "pingpongdialog.h"
+#include <QFileDialog>
+#include <QBuffer>
+#include "messagewidget.h"
+#include "picturewidget.h"
+#include <QScrollBar>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -31,14 +36,15 @@ private slots:
 
     void on_messageEdit_returnPressed();
 
+    void on_sendPictureButton_clicked();
+
 private:
     Ui::MainWindow *ui;
     QTcpSocket* socket;
     QByteArray data;
-    quint16 nextBlockSize;
+    quint32 nextBlockSize;
     NameDialog* nameDialog;
     quint16 id;
-    //PingPongDialog* pingPongDialog;
     bool connected;
 
     void setNameFromServer(QDataStream& in);
@@ -48,6 +54,7 @@ private:
     void pingPongAskFromServer();
     void sendDisconnectMessageToServer();
     void disconnectFromServer();
+    void setPictureFromServer(QDataStream& in);
 
 public slots:
     void slotReadyRead();

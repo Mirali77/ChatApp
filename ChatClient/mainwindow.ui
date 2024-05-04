@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>800</width>
-    <height>600</height>
+    <width>792</width>
+    <height>557</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,7 +16,7 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QHBoxLayout" name="horizontalLayout_4">
     <item>
-     <layout class="QVBoxLayout" name="verticalLayout">
+     <layout class="QVBoxLayout" name="verticalLayout" stretch="1,11,1,1">
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,1,1,2">
         <item>
@@ -53,7 +53,7 @@
        </layout>
       </item>
       <item>
-       <widget class="QTextBrowser" name="chatBrowser"/>
+       <widget class="QListWidget" name="chatBrowser"/>
       </item>
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="3,1">
@@ -85,7 +85,7 @@
          </spacer>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton_5">
+         <widget class="QPushButton" name="sendPictureButton">
           <property name="text">
            <string>Отправить картинку</string>
           </property>
@@ -102,7 +102,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>800</width>
+     <width>792</width>
      <height>22</height>
     </rect>
    </property>

@@ -18,17 +18,23 @@ DEFINES += QT_DEPRECATED_WARNINGS
 SOURCES += \
     main.cpp \
     mainwindow.cpp \
+    messagewidget.cpp \
     namedialog.cpp \
+    picturewidget.cpp \
     pingpongdialog.cpp
 
 HEADERS += \
     mainwindow.h \
+    messagewidget.h \
     namedialog.h \
+    picturewidget.h \
     pingpongdialog.h
 
 FORMS += \
     mainwindow.ui \
+    messagewidget.ui \
     namedialog.ui \
+    picturewidget.ui \
     pingpongdialog.ui
 
 # Default rules for deployment.
