@@ -4,7 +4,7 @@ Server::Server()
 {
     if (this->listen(QHostAddress::Any, 2323)) qDebug() << "Succesfully connected";
     else qDebug() << "Connection failed";
-    for (quint16 i = 0; i < quint16(10000); i++) freeIds.insert(i);
+    for (quint16 i = 1; i <= quint16(10000); i++) freeIds.push_back(i);
     nextBlockSize = 0;
 }
 
@@ -14,10 +14,10 @@ void Server::incomingConnection(qintptr socketDescriptor) {
     connect(socket, &QTcpSocket::readyRead, this, &Server::slotReadyRead);
     connect(socket, &QTcpSocket::disconnected, socket, &QTcpSocket::deleteLater);
 
-    quint16 id = *freeIds.begin();
+    quint16 id = freeIds.front();
+    freeIds.pop_front();
     user_sockets[id] = socket;
     user_names[id] = "Пользователь" + QString::number(id);
-    freeIds.erase(freeIds.begin());
     qDebug() << "Client" << id << "connected";
     sendIdToUser(id);
     sendNameToUser(id);
@@ -36,9 +36,20 @@ void Server::incomingConnection(qintptr socketDescriptor) {
             data.clear();
             QDataStream out(&data, QIODevice::WriteOnly);
             out.setVersion(QDataStream::Qt_5_12);
-            out << quint16(0) << quint16(1) << sender << message;
+            out << quint32(0) << quint16(1) << sender << message;
             out.device()->seek(0);
-            out << quint16(data.size() - sizeof(quint16));
+            out << quint32(data.size() - sizeof(quint32));
+            user_sockets[id]->write(data);
+        }
+        else {
+            QImage pic;
+            in >> pic;
+            data.clear();
+            QDataStream out(&data, QIODevice::WriteOnly);
+            out.setVersion(QDataStream::Qt_5_12);
+            out << quint32(0) << quint16(4) << sender << pic;
+            out.device()->seek(0);
+            out << quint32(data.size() - sizeof(quint32));
             user_sockets[id]->write(data);
         }
     }
@@ -55,12 +66,15 @@ void Server::pingPongAsk() {
     }
     quint16 id = pingPongAskQueue.front();
     pingPongAskQueue.pop_front();
+    if (!user_sockets.contains(id)) {
+        return;
+    }
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << quint16(3);
+    out << quint32(0) << quint16(3);
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
+    out << quint32(data.size() - sizeof(quint32));
     user_sockets[id]->write(data);
 
     pingPongCheckQueue.push_back(id);
@@ -74,7 +88,9 @@ void Server::pingPongCheckAns() {
     }
     quint16 id = pingPongCheckQueue.front();
     pingPongCheckQueue.pop_front();
-    data.clear();
+    if (!user_sockets.contains(id)) {
+        return;
+    }
     if (user_confirmed.contains(id)) {
         user_confirmed.remove(id);
         pingPongAskQueue.push_back(id);
@@ -96,8 +112,8 @@ void Server::slotReadyRead() {
         qDebug() << "Reading ";
         while (true) {
             if (!nextBlockSize) {
-                if (socket->bytesAvailable() < 2) {
-                    qDebug() << "Available bytes less than 2";
+                if (socket->bytesAvailable() < 4) {
+                    qDebug() << "Available bytes less than 4";
                     break;
                 }
                 in >> nextBlockSize;
@@ -106,6 +122,8 @@ void Server::slotReadyRead() {
             if (socket->bytesAvailable() < nextBlockSize) {
                 qDebug() << "Data is not fully loaded";
                 break;
+                //continue;
+                //break;
             }
             quint16 id, type;
             in >> id >> type;
@@ -113,6 +131,7 @@ void Server::slotReadyRead() {
             // 1 - set message from user
             // 2 - disconnect user
             // 3 - ping pong confirmation from user
+            // 4 - set picture from user
             switch (type) {
                 case 0:
                     setNameFromUser(id, in);
@@ -126,6 +145,9 @@ void Server::slotReadyRead() {
                 case 3:
                     pingPongConfirmUser(id);
                     break;
+                case 4:
+                    setPictureFromUser(id, in);
+                    break;
             }
             nextBlockSize = 0;
         }
@@ -133,6 +155,12 @@ void Server::slotReadyRead() {
     else {
         qDebug() << "DataStream error";
     }
+}
+
+void Server::setPictureFromUser(quint16 id, QDataStream& in) {
+    QImage pic;
+    in >> pic;
+    pictureAnnouncement(id, pic);
 }
 
 void Server::setNameFromUser(quint16 id, QDataStream &in) {
@@ -158,7 +186,7 @@ void Server::deleteUser() {
     quint16 id = usersToDeleteQueue.front();
     qDebug() << id;
     usersToDeleteQueue.pop_front();
-    freeIds.insert(id);
+    freeIds.push_back(id);
     user_names.remove(id);
     user_sockets[id]->disconnect();
     user_sockets.remove(id);
@@ -180,20 +208,39 @@ void Server::messageAnnouncement(quint16 senderId, QString message) {
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << quint16(1) << (senderId == serverId? "Сервер" : user_names[senderId]) << message;
+    out << quint32(0) << quint16(1) << (senderId == serverId? "Сервер" : user_names[senderId]) << message;
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
-    for (auto it = user_sockets.cbegin(); it != user_sockets.cend(); it++)
+    out << quint32(data.size() - sizeof(quint32));
+    for (auto it = user_sockets.cbegin(); it != user_sockets.cend(); it++) {
         it.value()->write(data);
+    }
+}
+
+void Server::pictureAnnouncement(quint16 senderId, QImage pic) {
+    data.clear();
+    QDataStream pout(&data, QIODevice::WriteOnly);
+    pout.setVersion(QDataStream::Qt_5_12);
+    pout << quint16(1) << (senderId == serverId? "Сервер" : user_names[senderId]) << pic;
+    chatStory.push_back(data);
+
+    data.clear();
+    QDataStream out(&data, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_5_12);
+    out << quint32(0) << quint16(4) << (senderId == serverId? "Сервер" : user_names[senderId]) << pic;
+    out.device()->seek(0);
+    out << quint32(data.size() - sizeof(quint32));
+    for (auto it = user_sockets.cbegin(); it != user_sockets.cend(); it++) {
+        it.value()->write(data);
+    }
 }
 
 void Server::sendNameToUser(quint16 userId) {
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << quint16(0) << user_names[userId];
+    out << quint32(0) << quint16(0) << user_names[userId];
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
+    out << quint32(data.size() - sizeof(quint32));
     user_sockets[userId]->write(data);
 }
 
@@ -201,8 +248,8 @@ void Server::sendIdToUser(quint16 userId) {
     data.clear();
     QDataStream out(&data, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_12);
-    out << quint16(0) << quint16(2) << userId;
+    out << quint32(0) << quint16(2) << userId;
     out.device()->seek(0);
-    out << quint16(data.size() - sizeof(quint16));
+    out << quint32(data.size() - sizeof(quint32));
     user_sockets[userId]->write(data);
 }

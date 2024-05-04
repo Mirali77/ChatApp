@@ -9,6 +9,8 @@
 #include <QTimer>
 #include <QSet>
 #include <QQueue>
+#include <QPixmap>
+#include <QImage>
 
 class Server : public QTcpServer
 {
@@ -17,16 +19,17 @@ public:
     Server();
     QTcpSocket *socket;
     void messageAnnouncement(quint16 userId, QString message);
+    void pictureAnnouncement(quint16 senderId, QImage pic);
     void sendNameToUser(quint16 userId);
     void sendIdToUser(quint16 userId);
 
 private:
-    QSet<quint16> freeIds;
+    QQueue<quint16> freeIds;
     QMap<quint16, QTcpSocket*> user_sockets;
     QMap<quint16, QString> user_names;
     QSet<quint16> user_confirmed;
     QByteArray data;
-    quint16 nextBlockSize;
+    quint32 nextBlockSize;
     const quint16 serverId = quint16(10001);
     QQueue<quint16> usersToDeleteQueue, pingPongAskQueue, pingPongCheckQueue;
     QVector<QByteArray> chatStory;
@@ -38,6 +41,7 @@ private:
     void pingPongAsk();
     void pingPongCheckAns();
     void pingPongConfirmUser(quint16 id);
+    void setPictureFromUser(quint16 id, QDataStream& in);
 
 public slots:
     void incomingConnection(qintptr socketDescriptor);
